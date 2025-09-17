@@ -1,42 +1,82 @@
-import { useState, useEffect } from "react";
-import { Sun, Wind, Battery, Zap, Home } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Sun, Wind, Battery, Zap, Home, Wifi, WifiOff } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
 import Navigation from "@/components/Navigation";
 import EnergyGauge from "@/components/EnergyGauge";
+import ThingSpeakConfig from "@/components/ThingSpeakConfig";
+import ThingSpeakService, { EnergyData } from "@/services/thingspeakService";
+import { useToast } from "@/components/ui/use-toast";
 
 const Dashboard = () => {
-  const [energyData, setEnergyData] = useState({
+  const [energyData, setEnergyData] = useState<EnergyData>({
     solarGeneration: 0,
     windGeneration: 0,
     batteryLevel: 0,
     consumption: 0,
     totalGeneration: 0,
+    voltage: 48.0,
+    current: 3.5,
+    timestamp: new Date().toISOString(),
   });
+  const [thingSpeakService, setThingSpeakService] = useState<ThingSpeakService | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<string>('');
+  const { toast } = useToast();
 
-  // Simulate real-time data updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setEnergyData({
-        solarGeneration: Math.floor(Math.random() * 500) + 200,
-        windGeneration: Math.floor(Math.random() * 300) + 100,
-        batteryLevel: Math.floor(Math.random() * 40) + 60,
-        consumption: Math.floor(Math.random() * 200) + 150,
-        totalGeneration: Math.floor(Math.random() * 800) + 300,
+  const handleConfigChange = useCallback((channelId: string, readApiKey: string) => {
+    const service = new ThingSpeakService(channelId, readApiKey);
+    setThingSpeakService(service);
+    setIsConnected(true);
+  }, []);
+
+  const fetchData = useCallback(async () => {
+    if (!thingSpeakService) return;
+    
+    setIsLoading(true);
+    try {
+      const data = await thingSpeakService.getLatestData();
+      if (data) {
+        setEnergyData(data);
+        setLastUpdated(new Date(data.timestamp).toLocaleTimeString());
+      } else {
+        // Fallback to demo data if no data available
+        setEnergyData(prev => ({
+          ...prev,
+          solarGeneration: Math.floor(Math.random() * 500) + 200,
+          windGeneration: Math.floor(Math.random() * 300) + 100,
+          batteryLevel: Math.floor(Math.random() * 40) + 60,
+          consumption: Math.floor(Math.random() * 200) + 150,
+          totalGeneration: Math.floor(Math.random() * 800) + 300,
+        }));
+        setLastUpdated(new Date().toLocaleTimeString());
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast({
+        title: "Connection Error",
+        description: "Failed to fetch data from ThingSpeak. Using cached data.",
+        variant: "destructive",
       });
-    }, 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [thingSpeakService, toast]);
 
-    // Initial load
-    setEnergyData({
-      solarGeneration: 324,
-      windGeneration: 156,
-      batteryLevel: 78,
-      consumption: 180,
-      totalGeneration: 480,
-    });
+  // Real-time data updates
+  useEffect(() => {
+    if (!thingSpeakService) return;
+
+    // Fetch initial data
+    fetchData();
+
+    // Set up interval for regular updates
+    const interval = setInterval(fetchData, 15000); // Update every 15 seconds
 
     return () => clearInterval(interval);
-  }, []);
+  }, [thingSpeakService, fetchData]);
 
   const energyCards = [
     {
@@ -73,9 +113,34 @@ const Dashboard = () => {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto p-4 pb-20">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-foreground">Microgrid Dashboard</h1>
-          <p className="text-muted-foreground">Real-time energy monitoring</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Microgrid Dashboard</h1>
+              <p className="text-muted-foreground">Real-time energy monitoring</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {isConnected ? (
+                <Badge variant="default" className="flex items-center gap-1">
+                  <Wifi className="w-3 h-3" />
+                  Connected
+                </Badge>
+              ) : (
+                <Badge variant="secondary" className="flex items-center gap-1">
+                  <WifiOff className="w-3 h-3" />
+                  Demo Mode
+                </Badge>
+              )}
+              {lastUpdated && (
+                <span className="text-xs text-muted-foreground">
+                  Updated: {lastUpdated}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
+
+        {/* ThingSpeak Configuration */}
+        <ThingSpeakConfig onConfigChange={handleConfigChange} />
 
         {/* Battery Level Gauge */}
         <div className="mb-6">
@@ -123,11 +188,11 @@ const Dashboard = () => {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-muted-foreground">Voltage</p>
-                  <p className="font-semibold">48.2V</p>
+                  <p className="font-semibold">{energyData.voltage.toFixed(1)}V</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Current</p>
-                  <p className="font-semibold">3.7A</p>
+                  <p className="font-semibold">{energyData.current.toFixed(1)}A</p>
                 </div>
               </div>
             </div>
