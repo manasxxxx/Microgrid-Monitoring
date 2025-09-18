@@ -32,8 +32,10 @@ function getWeatherDescription(code) {
 }
 // Collapsible sidebar component
 import React from "react";
-function SidebarPanel({ location, setLocation, weather, suggestions, windMsg }) {
+import { Settings } from "lucide-react";
+function SidebarPanel({ location, setLocation, weather, suggestions, windMsg, handleConfigChange }) {
   const [open, setOpen] = React.useState(true);
+  const [showConfig, setShowConfig] = React.useState(false);
   return (
     <>
       <button
@@ -100,6 +102,26 @@ function SidebarPanel({ location, setLocation, weather, suggestions, windMsg }) 
             <span className="text-sm text-blue-900">{windMsg}</span>
           </div>
         )}
+        {/* Settings button at the bottom */}
+        <div className="mt-auto p-4 border-t flex justify-end">
+          <button
+            className="flex items-center gap-2 text-blue-700 hover:underline text-sm"
+            onClick={() => setShowConfig(true)}
+          >
+            <Settings className="w-4 h-4" /> ThingSpeak Settings
+          </button>
+        </div>
+        {/* Modal for ThingSpeakConfig */}
+          {showConfig && (
+            <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center">
+              <div className="bg-white rounded-lg shadow-lg p-10 w-full max-w-2xl min-w-[400px] min-h-[350px]">
+                <ThingSpeakConfig onConfigChange={handleConfigChange} />
+                <div className="flex justify-end mt-4">
+                  <button className="text-blue-700 hover:underline text-sm" onClick={() => setShowConfig(false)}>Close</button>
+                </div>
+              </div>
+            </div>
+          )}
       </div>
     </>
   );
@@ -161,7 +183,11 @@ const Dashboard = () => {
     dashboardTitle = 'Hybrid/Other Grid Dashboard';
     bgClass = 'bg-gradient-to-br from-gray-50 to-green-100';
   }
-  const [thingSpeakService, setThingSpeakService] = useState<ThingSpeakService | null>(null);
+  // Initialize with default channel/key so data loads without opening settings
+  const [thingSpeakService, setThingSpeakService] = useState<ThingSpeakService | null>(() => new ThingSpeakService(
+    localStorage.getItem('thingspeak_channel') || '3079847',
+    localStorage.getItem('thingspeak_read_key') || ''
+  ));
   // Location and weather state
   const [location, setLocation] = useState(DEFAULT_LOCATIONS[0]);
   const [weather, setWeather] = useState<any>(null);
@@ -207,8 +233,9 @@ const Dashboard = () => {
     };
     fetchWeather();
   }, [location]);
-  const [channelId, setChannelId] = useState<string>('');
-  const [readApiKey, setReadApiKey] = useState<string>('');
+  // Set default channel and key (can be changed in settings)
+  const [channelId, setChannelId] = useState<string>(() => localStorage.getItem('thingspeak_channel') || '3079847');
+  const [readApiKey, setReadApiKey] = useState<string>(() => localStorage.getItem('thingspeak_read_key') || '');
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string>('');
@@ -385,6 +412,7 @@ const Dashboard = () => {
         weather={weather}
         suggestions={suggestions}
         windMsg={windMsg}
+        handleConfigChange={handleConfigChange}
       />
       <div className="container mx-auto p-4 pb-20">
         <div className="mb-6">
@@ -422,8 +450,7 @@ const Dashboard = () => {
             </div>
           )}
 
-        {/* ThingSpeak Configuration */}
-        <ThingSpeakConfig onConfigChange={handleConfigChange} />
+  {/* ThingSpeak Configuration moved to sidebar settings */}
 
         {/* Improved: Removed developer/raw API section for better usability */}
 
