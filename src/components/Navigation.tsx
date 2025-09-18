@@ -9,8 +9,8 @@ const Navigation = () => {
   const navItems = [
     { icon: Home, path: "/dashboard", label: "Dashboard" },
     { icon: AlertTriangle, path: "/alerts", label: "Alerts" },
-    { icon: BarChart3, path: "/history", label: "History" },
-    { icon: Settings, path: "/control", label: "Control" },
+  { icon: BarChart3, path: "/history", label: "Trends" },
+    // Removed Control nav item
   ];
 
   return (
