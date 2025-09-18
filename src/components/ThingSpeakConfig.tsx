@@ -11,19 +11,48 @@ interface ThingSpeakConfigProps {
 }
 
 const ThingSpeakConfig = ({ onConfigChange }: ThingSpeakConfigProps) => {
+  const [channelId, setChannelId] = useState<string>(() => localStorage.getItem('thingspeak_channel') || '3079847');
+  const [readKey, setReadKey] = useState<string>(() => localStorage.getItem('thingspeak_read_key') || '');
+  const [saving, setSaving] = useState(false);
+
   useEffect(() => {
-    // Hardcoded credentials
-    onConfigChange('3079847', 'G6B2JZLXCM9IVD5J');
-  }, [onConfigChange]);
+    // Initialize with stored or default channel on mount
+    onConfigChange(channelId, readKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSave = () => {
+    setSaving(true);
+    try {
+      localStorage.setItem('thingspeak_channel', channelId);
+      localStorage.setItem('thingspeak_read_key', readKey);
+      onConfigChange(channelId, readKey);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <Card className="mb-4">
-      <CardContent className="p-4">
-        <div className="flex items-center gap-2">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
           <Settings className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">
-            Connected to Channel: 3079847
-          </span>
+          ThingSpeak Configuration
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
+        <div className="col-span-1 md:col-span-1">
+          <Label htmlFor="channel">Channel ID</Label>
+          <Input id="channel" value={channelId} onChange={(e) => setChannelId(e.target.value)} />
+        </div>
+        <div className="col-span-1 md:col-span-1">
+          <Label htmlFor="readKey">Read API Key (optional)</Label>
+          <Input id="readKey" value={readKey} onChange={(e) => setReadKey(e.target.value)} />
+        </div>
+        <div className="col-span-1 md:col-span-1">
+          <Button onClick={handleSave} disabled={saving} className="w-full">
+            <Save className="w-4 h-4 mr-2" /> Save
+          </Button>
         </div>
       </CardContent>
     </Card>

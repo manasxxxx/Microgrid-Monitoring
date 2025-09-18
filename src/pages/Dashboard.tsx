@@ -411,6 +411,14 @@ const Dashboard = () => {
           </div>
         </div>
 
+          {errorDetail && (
+            <div className="mb-4 p-3 rounded bg-red-50 border border-red-100 text-sm text-red-700">
+              <div className="font-medium">ThingSpeak Error: {errorDetail.message}</div>
+              {errorDetail.status && <div>Status: {errorDetail.status}</div>}
+              {errorDetail.body && <div className="break-words">{errorDetail.body}</div>}
+            </div>
+          )}
+
         {/* ThingSpeak Configuration */}
         <ThingSpeakConfig onConfigChange={handleConfigChange} />
 

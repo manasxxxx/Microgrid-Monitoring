@@ -1,13 +1,13 @@
 export interface ThingSpeakEntry {
   created_at: string;
   entry_id: number;
-  field1?: string; // Solar generation
+  field1?: string; // Current
   field2?: string; // Wind generation  
-  field3?: string; // Battery level
+  field3?: string; // Voltage
   field4?: string; // Consumption
-  field5?: string; // Total generation
-  field6?: string; // Voltage
-  field7?: string; // Current
+  field5?: string; // Dust
+  field6?: string; // Temperature
+  field7?: string; // Battery level
   field8?: string; // Additional field
 }
 
@@ -33,10 +33,10 @@ export interface ThingSpeakChannel {
 }
 
 export interface EnergyData {
-  gridGeneration: number; // from current (field7)
-  gridVoltage: number;    // from voltage (field6)
+  gridGeneration: number; // from current (field1)
+  gridVoltage: number;    // from voltage (field3)
   batteryLevel: number;
-  temperature: number;    // from field8
+  temperature: number;    // from field6
   dust: number;           // from field5
   timestamp: string;
 }
@@ -115,22 +115,29 @@ class ThingSpeakService {
   private parseEntry(entry: ThingSpeakEntry): EnergyData | null {
     if (!entry) return null;
     return {
-      gridGeneration: parseFloat(entry.field7 || '0'), // current
-      gridVoltage: parseFloat(entry.field6 || '0'),    // voltage
-      batteryLevel: parseFloat(entry.field3 || '0'),
-      temperature: parseFloat(entry.field8 || '0'),
-      dust: parseFloat(entry.field5 || '0'),
+      gridGeneration: Number(entry.field1 ?? 0), // current
+      gridVoltage: Number(entry.field3 ?? 0),    // voltage
+      batteryLevel: Number(entry.field7 ?? 0),
+      temperature: Number(entry.field6 ?? 0),
+      dust: Number(entry.field5 ?? 0),
       timestamp: entry.created_at
     };
   }
 
   private buildUrl(...parts: string[]): string {
-    let url = this.baseUrl + parts.join('');
-    
+    // Normalize parts and join with single slashes to avoid missing or duplicate slashes
+    const normalized = parts
+      .map(p => String(p))
+      .filter(p => p.length > 0)
+      .map(p => p.replace(/^\/+/, '').replace(/\/+$/, ''))
+      .join('/');
+
+    let url = this.baseUrl.replace(/\/+$/, '') + '/' + normalized;
+
     if (this.readApiKey) {
-      url += `${url.includes('?') ? '&' : '?'}api_key=${this.readApiKey}`;
+      url += `${url.includes('?') ? '&' : '?'}api_key=${encodeURIComponent(this.readApiKey)}`;
     }
-    
+
     return url;
   }
 }
