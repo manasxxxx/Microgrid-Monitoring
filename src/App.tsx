@@ -11,6 +11,7 @@ import History from "./pages/History";
 import Control from "./pages/Control";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import GridSelect from "./pages/GridSelect";
 
 const queryClient = new QueryClient();
 
@@ -24,6 +25,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/grid-select" element={<GridSelect />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/alerts" element={<Alerts />} />
             <Route path="/history" element={<History />} />

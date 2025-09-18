@@ -33,13 +33,11 @@ export interface ThingSpeakChannel {
 }
 
 export interface EnergyData {
-  solarGeneration: number;
-  windGeneration: number;
+  gridGeneration: number; // from current (field7)
+  gridVoltage: number;    // from voltage (field6)
   batteryLevel: number;
-  consumption: number;
-  totalGeneration: number;
-  voltage: number;
-  current: number;
+  temperature: number;    // from field8
+  dust: number;           // from field5
   timestamp: string;
 }
 
@@ -48,25 +46,39 @@ class ThingSpeakService {
   private readApiKey: string;
   private baseUrl = 'https://api.thingspeak.com';
 
-  constructor(channelId: string, readApiKey: string = '') {
+  // Read API key from Vite environment at build time if provided
+  // import.meta.env is a Vite-specific object; use any to avoid TS errors
+  private static getEnvReadKey(): string {
+    try {
+      return ((import.meta as any).VITE_THINGSPEAK_API_KEY || '').toString();
+    } catch (e) {
+      return '';
+    }
+  }
+
+  constructor(channelId: string, readApiKey: string = ThingSpeakService.getEnvReadKey()) {
     this.channelId = channelId;
-    this.readApiKey = readApiKey;
+    this.readApiKey = readApiKey || ThingSpeakService.getEnvReadKey();
   }
 
   setCredentials(channelId: string, readApiKey: string = '') {
-    this.channelId = channelId;
-    this.readApiKey = readApiKey;
+  this.channelId = channelId;
+  this.readApiKey = readApiKey || ThingSpeakService.getEnvReadKey();
   }
 
   async getLatestData(): Promise<EnergyData | null> {
     try {
       const url = this.buildUrl('/channels', this.channelId, '/feeds/last.json');
       const response = await fetch(url);
-      
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const text = await response.text().catch(() => '');
+        const err: any = new Error(`ThingSpeak getLatestData failed: ${response.status} ${response.statusText}`);
+        err.status = response.status;
+        err.body = text;
+        throw err;
       }
-      
+
       const data: ThingSpeakEntry = await response.json();
       
       return this.parseEntry(data);
@@ -80,11 +92,15 @@ class ThingSpeakService {
     try {
       const url = this.buildUrl('/channels', this.channelId, `/feeds.json?results=${results}`);
       const response = await fetch(url);
-      
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const text = await response.text().catch(() => '');
+        const err: any = new Error(`ThingSpeak getHistoricalData failed: ${response.status} ${response.statusText}`);
+        err.status = response.status;
+        err.body = text;
+        throw err;
       }
-      
+
       const data: ThingSpeakChannel = await response.json();
       
       return data.feeds
@@ -98,15 +114,12 @@ class ThingSpeakService {
 
   private parseEntry(entry: ThingSpeakEntry): EnergyData | null {
     if (!entry) return null;
-    
     return {
-      solarGeneration: parseFloat(entry.field1 || '0'),
-      windGeneration: parseFloat(entry.field2 || '0'), 
+      gridGeneration: parseFloat(entry.field7 || '0'), // current
+      gridVoltage: parseFloat(entry.field6 || '0'),    // voltage
       batteryLevel: parseFloat(entry.field3 || '0'),
-      consumption: parseFloat(entry.field4 || '0'),
-      totalGeneration: parseFloat(entry.field5 || '0'),
-      voltage: parseFloat(entry.field6 || '48.0'),
-      current: parseFloat(entry.field7 || '3.5'),
+      temperature: parseFloat(entry.field8 || '0'),
+      dust: parseFloat(entry.field5 || '0'),
       timestamp: entry.created_at
     };
   }
@@ -123,3 +136,35 @@ class ThingSpeakService {
 }
 
 export default ThingSpeakService;
+
+// Convenience helpers for quick GET/READ operations outside of the class
+export async function fetchChannelLastRaw(channelId: string, readApiKey: string = ''): Promise<any> {
+  const base = 'https://api.thingspeak.com';
+  const url = `${base}/channels/${encodeURIComponent(channelId)}/feeds/last.json${readApiKey ? `?api_key=${encodeURIComponent(readApiKey)}` : ''}`;
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    const err: any = new Error(`ThingSpeak last entry fetch failed: ${res.status} ${res.statusText}`);
+    err.status = res.status;
+    err.body = text;
+    throw err;
+  }
+  return res.json();
+}
+
+export async function fetchChannelFeedsRaw(channelId: string, results: number = 100, readApiKey: string = ''): Promise<any> {
+  const base = 'https://api.thingspeak.com';
+  const query = `results=${Number(results)}`;
+  const url = `${base}/channels/${encodeURIComponent(channelId)}/feeds.json?${query}${readApiKey ? `&api_key=${encodeURIComponent(readApiKey)}` : ''}`;
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    const err: any = new Error(`ThingSpeak feeds fetch failed: ${res.status} ${res.statusText}`);
+    err.status = res.status;
+    err.body = text;
+    throw err;
+  }
+  return res.json();
+}

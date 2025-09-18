@@ -40,7 +40,7 @@ const Login = () => {
         title: "Login Successful",
         description: "Welcome to Microgrid Monitor",
       });
-      navigate("/dashboard");
+  navigate("/grid-select");
     }, 1500);
   };
 

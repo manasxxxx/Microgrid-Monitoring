@@ -1,19 +1,10 @@
-import { useEffect } from "react";
+
 import { useNavigate } from "react-router-dom";
 import { Sun, Wind, Battery, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const Index = () => {
   const navigate = useNavigate();
-
-  useEffect(() => {
-    // Auto-redirect to login for first-time users
-    const timer = setTimeout(() => {
-      navigate("/login");
-    }, 3000);
-
-    return () => clearInterval(timer);
-  }, [navigate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center p-4">
@@ -45,9 +36,6 @@ const Index = () => {
             <Zap className="w-5 h-5 mr-2" />
             Get Started
           </Button>
-          <p className="text-sm text-muted-foreground">
-            Redirecting to login in 3 seconds...
-          </p>
         </div>
       </div>
     </div>
