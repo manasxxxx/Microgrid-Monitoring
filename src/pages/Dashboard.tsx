@@ -1,6 +1,126 @@
-import { useState, useEffect, useCallback } from "react";
+// Weather icon and description helpers for Open-Meteo codes
+function getWeatherIcon(code) {
+  // See https://open-meteo.com/en/docs for weathercode meanings
+  if (code === 0) return '☀️'; // Clear
+  if (code === 1 || code === 2) return '🌤️'; // Mainly clear/partly cloudy
+  if (code === 3) return '☁️'; // Overcast
+  if (code === 45 || code === 48) return '🌫️'; // Fog
+  if (code === 51 || code === 53 || code === 55) return '🌦️'; // Drizzle
+  if (code === 61 || code === 63 || code === 65) return '🌧️'; // Rain
+  if (code === 71 || code === 73 || code === 75) return '🌨️'; // Snow
+  if (code === 80 || code === 81 || code === 82) return '🌦️'; // Rain showers
+  if (code === 95) return '⛈️'; // Thunderstorm
+  if (code === 96 || code === 99) return '⛈️'; // Thunderstorm with hail
+  return '❓';
+}
 
-import { Sun, Wind, Battery, Zap, Home, Wifi, WifiOff, TrendingDown } from "lucide-react";
+function getWeatherDescription(code) {
+  switch (code) {
+    case 0: return 'Clear sky';
+    case 1: return 'Mainly clear';
+    case 2: return 'Partly cloudy';
+    case 3: return 'Overcast';
+    case 45: case 48: return 'Fog';
+    case 51: case 53: case 55: return 'Drizzle';
+    case 61: case 63: case 65: return 'Rain';
+    case 71: case 73: case 75: return 'Snow';
+    case 80: case 81: case 82: return 'Rain showers';
+    case 95: return 'Thunderstorm';
+    case 96: case 99: return 'Thunderstorm with hail';
+    default: return '';
+  }
+}
+// Collapsible sidebar component
+import React from "react";
+function SidebarPanel({ location, setLocation, weather, suggestions, windMsg }) {
+  const [open, setOpen] = React.useState(true);
+  return (
+    <>
+      <button
+        className="fixed top-4 right-4 z-40 bg-blue-600 text-white rounded-full shadow-lg p-2 hover:bg-blue-700 focus:outline-none"
+        onClick={() => setOpen(o => !o)}
+        aria-label={open ? 'Close sidebar' : 'Open sidebar'}
+      >
+        {open ? <span>&#10005;</span> : <span>&#9776;</span>}
+      </button>
+      <div
+        className={`fixed top-0 right-0 h-full w-80 bg-white shadow-2xl z-30 transition-transform duration-300 border-l border-gray-200 flex flex-col ${open ? '' : 'translate-x-full'}`}
+      >
+        <div className="p-4 border-b flex items-center gap-2">
+          <span className="font-semibold text-base">Location:</span>
+          <select
+            className="border rounded px-2 py-1 text-sm"
+            value={location.name}
+            onChange={e => {
+              const loc = DEFAULT_LOCATIONS.find(l => l.name === e.target.value);
+              if (loc) setLocation(loc);
+            }}
+          >
+            {DEFAULT_LOCATIONS.map(loc => (
+              <option key={loc.name} value={loc.name}>{loc.name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="p-4 border-b">
+          <div className="text-sm font-medium mb-1">Weather</div>
+          {weather ? (
+            <div className="flex items-center gap-3">
+              {/* Weather Icon */}
+              <span className="text-3xl">
+                {getWeatherIcon(weather.weathercode ?? weather.weather_code ?? 0)}
+              </span>
+              <div>
+                <div className="text-lg font-bold">
+                  {typeof weather.temperature === 'number' ? `${weather.temperature}°C` : '--'}
+                </div>
+                <div className="text-xs text-gray-700">
+                  {typeof weather.wind_speed_10m === 'number' ? `Wind: ${weather.wind_speed_10m} km/h` : ''}
+                  {typeof weather.precipitation === 'number' ? `, Rain: ${weather.precipitation} mm` : ''}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {getWeatherDescription(weather.weathercode ?? weather.weather_code ?? 0)}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-xs text-gray-400">No weather data</div>
+          )}
+        </div>
+        {suggestions.length > 0 && (
+          <div className="p-4 border-b bg-yellow-50 rounded-b-lg">
+            <div className="flex items-center gap-2 mb-1 text-yellow-800 font-semibold"><AlertTriangle className="w-4 h-4" /> Suggestions</div>
+            {suggestions.map((s, i) => (
+              <div key={i} className="text-sm text-yellow-900 mb-1">{s}</div>
+            ))}
+          </div>
+        )}
+        {windMsg && (
+          <div className="p-4 border-b bg-blue-50 rounded-b-lg flex items-center gap-2">
+            <Info className="w-4 h-4 text-blue-500" />
+            <span className="text-sm text-blue-900">{windMsg}</span>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+import { useState, useEffect, useCallback } from "react";
+// Example weather API endpoint (replace with your API key/service)
+const WEATHER_API = "https://api.open-meteo.com/v1/forecast";
+const DEFAULT_LOCATIONS = [
+  { name: "Bangalore", lat: 12.9716, lon: 77.5946 },
+  { name: "Delhi", lat: 28.6139, lon: 77.2090 },
+  { name: "Mumbai", lat: 19.0760, lon: 72.8777 },
+  { name: "Chennai", lat: 13.0827, lon: 80.2707 },
+  { name: "Kolkata", lat: 22.5726, lon: 88.3639 },
+  { name: "Hyderabad", lat: 17.3850, lon: 78.4867 }
+];
+
+import { Sun, Wind, Battery, Zap, Home, Wifi, WifiOff, TrendingDown, AlertTriangle, Info } from "lucide-react";
+
+
+
+
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 type BatteryHistoryPoint = { time: string; battery: number };
@@ -9,7 +129,6 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import Navigation from "@/components/Navigation";
 import EnergyGauge from "@/components/EnergyGauge";
-import EnergyFlow from "@/components/EnergyFlow";
 import ThingSpeakConfig from "@/components/ThingSpeakConfig";
 import ThingSpeakService, { EnergyData, fetchChannelLastRaw, fetchChannelFeedsRaw } from "@/services/thingspeakService";
 import { useToast } from "@/components/ui/use-toast";
@@ -43,6 +162,51 @@ const Dashboard = () => {
     bgClass = 'bg-gradient-to-br from-gray-50 to-green-100';
   }
   const [thingSpeakService, setThingSpeakService] = useState<ThingSpeakService | null>(null);
+  // Location and weather state
+  const [location, setLocation] = useState(DEFAULT_LOCATIONS[0]);
+  const [weather, setWeather] = useState<any>(null);
+  // On first load, try to get device geolocation and set location
+  React.useEffect(() => {
+    if (window && window.navigator && window.navigator.geolocation) {
+      window.navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          // Find nearest city from DEFAULT_LOCATIONS
+          let minDist = Infinity;
+          let nearest = null;
+          for (const loc of DEFAULT_LOCATIONS) {
+            const d = Math.sqrt(Math.pow(loc.lat - latitude, 2) + Math.pow(loc.lon - longitude, 2));
+            if (d < minDist) {
+              minDist = d;
+              nearest = loc;
+            }
+          }
+          // If within ~0.5 deg, use city, else use raw coords
+          if (nearest && minDist < 0.5) {
+            setLocation(nearest);
+          } else {
+            setLocation({ name: 'Current Location', lat: latitude, lon: longitude });
+          }
+        },
+        (err) => {},
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    }
+  }, []);
+  // Fetch weather when location changes
+  useEffect(() => {
+    const fetchWeather = async () => {
+      try {
+        const url = `${WEATHER_API}?latitude=${location.lat}&longitude=${location.lon}&current_weather=true&hourly=precipitation,wind_speed_10m`;
+        const res = await fetch(url);
+        const data = await res.json();
+        setWeather(data.current_weather || null);
+      } catch (e) {
+        setWeather(null);
+      }
+    };
+    fetchWeather();
+  }, [location]);
   const [channelId, setChannelId] = useState<string>('');
   const [readApiKey, setReadApiKey] = useState<string>('');
   const [isConnected, setIsConnected] = useState(false);
@@ -157,6 +321,34 @@ const Dashboard = () => {
     });
   }, [energyData.batteryLevel]);
 
+  // --- Proactive Suggestions Logic ---
+  const suggestions: string[] = [];
+  // Maintenance: suggest every 30 days (mock logic, can be improved)
+  const daysSinceMaintenance = 25; // TODO: Replace with real tracking
+  if (daysSinceMaintenance >= 30) {
+    suggestions.push("Maintenance due soon. Schedule a checkup.");
+  }
+  // Cleaning: suggest if dust high and no rain
+  const dustThreshold = 15;
+  const rainThreshold = 0.5; // mm
+  if (energyData.dust > dustThreshold && (!weather || !weather.precipitation || weather.precipitation < rainThreshold)) {
+    suggestions.push("Dust level high. Recommend cleaning solar panels.");
+  } else if (energyData.dust > dustThreshold && weather && weather.precipitation >= rainThreshold) {
+    suggestions.push("Dust high, but recent rain detected. Cleaning may not be needed.");
+  }
+  // Battery: recommend load reduction if battery drops >10% in last hour (mock logic)
+  if (batteryHistory.length > 2) {
+    const drop = batteryHistory[0].battery - batteryHistory[batteryHistory.length-1].battery;
+    if (drop > 10) {
+      suggestions.push("Battery discharging rapidly. Consider reducing load.");
+    }
+  }
+  // Wind: estimate wind power if wind grid and wind speed available
+  let windMsg = '';
+  if (gridType === 'wind' && weather && weather.wind_speed) {
+    windMsg = `Estimated wind power: ${(weather.wind_speed * 2).toFixed(0)} W (approx)`;
+  }
+
   const energyCards = [
     {
       title: "Grid Generation",
@@ -175,7 +367,7 @@ const Dashboard = () => {
   ];
 
   return (
-    <div className={`min-h-screen ${bgClass}`} style={{
+    <div className={`min-h-screen ${bgClass} relative`} style={{
       backgroundImage: gridType === 'solar'
         ? 'linear-gradient(135deg, #fffef8 0%, #fff9e6 50%, #fff3cc 100%), url("data:image/svg+xml,%3Csvg width=\'40\' height=\'40\' viewBox=\'0 0 40 40\' fill=\'none\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Ccircle cx=\'20\' cy=\'20\' r=\'1\' fill=\'%23fff3cc\' fill-opacity=\'0.12\'/%3E%3C/svg%3E")'
         : gridType === 'wind'
@@ -183,6 +375,14 @@ const Dashboard = () => {
         : undefined,
       backgroundRepeat: 'repeat',
     }}> 
+
+      <SidebarPanel
+        location={location}
+        setLocation={setLocation}
+        weather={weather}
+        suggestions={suggestions}
+        windMsg={windMsg}
+      />
       <div className="container mx-auto p-4 pb-20">
         <div className="mb-6">
           <div className="flex items-center justify-between">
@@ -215,14 +415,6 @@ const Dashboard = () => {
         <ThingSpeakConfig onConfigChange={handleConfigChange} />
 
         {/* Improved: Removed developer/raw API section for better usability */}
-
-        {/* Energy Flow Overview */}
-        <EnergyFlow
-          solar={energyData.gridGeneration}
-          battery={energyData.batteryLevel}
-          grid={energyData.gridVoltage}
-          load={energyData.gridGeneration}
-        />
 
         {/* Battery Level Gauge & Insights */}
         <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
