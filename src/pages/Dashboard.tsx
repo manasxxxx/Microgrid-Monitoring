@@ -142,8 +142,8 @@ const Dashboard = () => {
     dust: 0,
     timestamp: new Date().toISOString(),
   });
-  // Battery history for trend graph
-  const [batteryHistory, setBatteryHistory] = useState([] as { time: string; battery: number }[]);
+  // History for all metrics
+  const [history, setHistory] = useState<any[]>([]);
   const [gridType, setGridType] = useState<string>(() => localStorage.getItem('selectedGrid') || 'solar');
 
   // Set background and title based on gridType
@@ -296,30 +296,33 @@ const Dashboard = () => {
     }
   }, [thingSpeakService, toast]);
 
-  // Real-time data updates
+  // Real-time data updates for both current value and history
   useEffect(() => {
     if (!thingSpeakService) return;
 
-    // Fetch initial data
-    fetchData();
-
-    // Set up interval for regular updates
-    const interval = setInterval(fetchData, 15000); // Update every 15 seconds
-
+    const fetchAll = async () => {
+      await fetchData();
+      // Fetch last 20 points for charts
+      try {
+        const data = await thingSpeakService.getHistoricalData(20);
+        // Map to chart format
+        const mapped = data.map((d: any) => ({
+          time: d.timestamp ? new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+          voltage: d.gridVoltage,
+          current: d.gridGeneration,
+          temperature: d.temperature,
+          dust: d.dust,
+          battery: d.batteryLevel
+        }));
+        setHistory(mapped);
+      } catch (e) {
+        setHistory([]);
+      }
+    };
+    fetchAll();
+    const interval = setInterval(fetchAll, 15000);
     return () => clearInterval(interval);
   }, [thingSpeakService, fetchData]);
-
-  // Track battery history for trend graph
-  useEffect(() => {
-    setBatteryHistory((prev) => {
-      const now = new Date();
-      const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      const newEntry = { time, battery: energyData.batteryLevel };
-      // Keep only last 20 points
-      const updated = [...prev, newEntry].slice(-20);
-      return updated;
-    });
-  }, [energyData.batteryLevel]);
 
   // --- Proactive Suggestions Logic ---
   const suggestions: string[] = [];
@@ -337,8 +340,8 @@ const Dashboard = () => {
     suggestions.push("Dust high, but recent rain detected. Cleaning may not be needed.");
   }
   // Battery: recommend load reduction if battery drops >10% in last hour (mock logic)
-  if (batteryHistory.length > 2) {
-    const drop = batteryHistory[0].battery - batteryHistory[batteryHistory.length-1].battery;
+  if (history.length > 2) {
+    const drop = history[0].battery - history[history.length-1].battery;
     if (drop > 10) {
       suggestions.push("Battery discharging rapidly. Consider reducing load.");
     }
@@ -424,7 +427,7 @@ const Dashboard = () => {
 
         {/* Improved: Removed developer/raw API section for better usability */}
 
-        {/* Battery Level Gauge & Insights */}
+        {/* Battery Level Gauge & Insights + Battery Chart */}
         <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <EnergyGauge 
@@ -438,7 +441,6 @@ const Dashboard = () => {
                 <span className="font-medium">Estimated Time to Depletion:</span>
                 <span>
                   {(() => {
-                    // Estimate: batteryLevel (%) / gridGeneration (A) * 1h (if gridGeneration > 0)
                     const rate = Math.abs(energyData.gridGeneration);
                     if (rate > 0) {
                       const hours = energyData.batteryLevel / rate;
@@ -466,7 +468,7 @@ const Dashboard = () => {
           <div className="bg-white/60 rounded shadow p-4 flex flex-col h-full">
             <div className="font-semibold mb-2">Battery Level Trend</div>
             <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={batteryHistory} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+              <LineChart data={history} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="time" minTickGap={20} />
                 <YAxis domain={[0, 100]} tickFormatter={v => `${v}%`} />
@@ -477,25 +479,59 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Grid Generation & Voltage Cards */}
+        {/* Grid Generation & Voltage Cards + Charts */}
         <div className="grid grid-cols-2 gap-4 mb-6">
-          {energyCards.map((card, index) => (
-            <Card key={index} className="relative overflow-hidden">
-              <CardContent className="p-4">
-                <div className={`w-10 h-10 rounded-lg ${card.bgColor} flex items-center justify-center mb-3`}>
-                  <card.icon className={`w-6 h-6 ${card.color}`} />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground font-medium">{card.title}</p>
-                  <p className="text-2xl font-bold text-foreground">{card.value}</p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          {/* Grid Generation (Current) */}
+          <Card className="relative overflow-hidden">
+            <CardContent className="p-4">
+              <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center mb-3">
+                <Zap className="w-6 h-6 text-green-600" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground font-medium">Grid Generation</p>
+                <p className="text-2xl font-bold text-foreground">{energyData.gridGeneration} A</p>
+              </div>
+              <div className="mt-4">
+                <ResponsiveContainer width="100%" height={100}>
+                  <LineChart data={history} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="time" minTickGap={20} />
+                    <YAxis />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="current" stroke="#22c55e" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+          {/* Grid Voltage */}
+          <Card className="relative overflow-hidden">
+            <CardContent className="p-4">
+              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center mb-3">
+                <Home className="w-6 h-6 text-blue-600" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground font-medium">Grid Voltage</p>
+                <p className="text-2xl font-bold text-foreground">{energyData.gridVoltage} V</p>
+              </div>
+              <div className="mt-4">
+                <ResponsiveContainer width="100%" height={100}>
+                  <LineChart data={history} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="time" minTickGap={20} />
+                    <YAxis />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="voltage" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Temperature & Dust Card */}
+        {/* Temperature & Dust Cards + Charts */}
         <div className="grid grid-cols-2 gap-4 mb-6">
+          {/* Temperature */}
           <Card className="relative overflow-hidden">
             <CardContent className="p-4">
               <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center mb-3">
@@ -505,8 +541,20 @@ const Dashboard = () => {
                 <p className="text-sm text-muted-foreground font-medium">Temperature</p>
                 <p className="text-2xl font-bold text-foreground">{energyData.temperature} °C</p>
               </div>
+              <div className="mt-4">
+                <ResponsiveContainer width="100%" height={100}>
+                  <LineChart data={history} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="time" minTickGap={20} />
+                    <YAxis />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="temperature" stroke="#f97316" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </CardContent>
           </Card>
+          {/* Dust */}
           <Card className="relative overflow-hidden">
             <CardContent className="p-4">
               <div className="w-10 h-10 rounded-lg bg-yellow-50 flex items-center justify-center mb-3">
@@ -515,6 +563,17 @@ const Dashboard = () => {
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground font-medium">Dust</p>
                 <p className="text-2xl font-bold text-foreground">{energyData.dust} ppm</p>
+              </div>
+              <div className="mt-4">
+                <ResponsiveContainer width="100%" height={100}>
+                  <LineChart data={history} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="time" minTickGap={20} />
+                    <YAxis />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="dust" stroke="#eab308" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>

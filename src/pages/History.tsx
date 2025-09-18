@@ -16,8 +16,9 @@ const History = () => {
   // Date range selection
   const [dateRange, setDateRange] = useState<{start: string, end: string}>({start: '', end: ''});
 
-  // Fetch data on mount and when dateRange changes
+  // Fetch data on mount, when dateRange changes, and every 15 seconds
   useEffect(() => {
+    let interval: NodeJS.Timeout;
     const fetchData = async () => {
       setLoading(true);
       const channelId = "3079847";
@@ -49,6 +50,8 @@ const History = () => {
       setLoading(false);
     };
     fetchData();
+    interval = setInterval(fetchData, 15000);
+    return () => clearInterval(interval);
   }, [dateRange.start, dateRange.end]);
 
   // Advanced anomaly detection (z-score for temperature and dust)
