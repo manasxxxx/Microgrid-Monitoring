@@ -1,10 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
-import { Sun, Wind, Battery, Zap, Home, Wifi, WifiOff } from "lucide-react";
+
+import { Sun, Wind, Battery, Zap, Home, Wifi, WifiOff, TrendingDown } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+type BatteryHistoryPoint = { time: string; battery: number };
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import Navigation from "@/components/Navigation";
 import EnergyGauge from "@/components/EnergyGauge";
+import EnergyFlow from "@/components/EnergyFlow";
 import ThingSpeakConfig from "@/components/ThingSpeakConfig";
 import ThingSpeakService, { EnergyData, fetchChannelLastRaw, fetchChannelFeedsRaw } from "@/services/thingspeakService";
 import { useToast } from "@/components/ui/use-toast";
@@ -18,6 +23,8 @@ const Dashboard = () => {
     dust: 0,
     timestamp: new Date().toISOString(),
   });
+  // Battery history for trend graph
+  const [batteryHistory, setBatteryHistory] = useState([] as { time: string; battery: number }[]);
   const [gridType, setGridType] = useState<string>(() => localStorage.getItem('selectedGrid') || 'solar');
 
   // Set background and title based on gridType
@@ -138,6 +145,18 @@ const Dashboard = () => {
     return () => clearInterval(interval);
   }, [thingSpeakService, fetchData]);
 
+  // Track battery history for trend graph
+  useEffect(() => {
+    setBatteryHistory((prev) => {
+      const now = new Date();
+      const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const newEntry = { time, battery: energyData.batteryLevel };
+      // Keep only last 20 points
+      const updated = [...prev, newEntry].slice(-20);
+      return updated;
+    });
+  }, [energyData.batteryLevel]);
+
   const energyCards = [
     {
       title: "Grid Generation",
@@ -197,13 +216,65 @@ const Dashboard = () => {
 
         {/* Improved: Removed developer/raw API section for better usability */}
 
-        {/* Battery Level Gauge */}
-        <div className="mb-6">
-          <EnergyGauge 
-            value={energyData.batteryLevel} 
-            title="Battery Level" 
-            unit="%" 
-          />
+        {/* Energy Flow Overview */}
+        <EnergyFlow
+          solar={energyData.gridGeneration}
+          battery={energyData.batteryLevel}
+          grid={energyData.gridVoltage}
+          load={energyData.gridGeneration}
+        />
+
+        {/* Battery Level Gauge & Insights */}
+        <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <EnergyGauge 
+              value={energyData.batteryLevel} 
+              title="Battery Level" 
+              unit="%" 
+            />
+            <div className="mt-4 p-4 bg-white/60 rounded shadow flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <TrendingDown className="w-4 h-4 text-yellow-600" />
+                <span className="font-medium">Estimated Time to Depletion:</span>
+                <span>
+                  {(() => {
+                    // Estimate: batteryLevel (%) / gridGeneration (A) * 1h (if gridGeneration > 0)
+                    const rate = Math.abs(energyData.gridGeneration);
+                    if (rate > 0) {
+                      const hours = energyData.batteryLevel / rate;
+                      if (hours > 48) return '>2 days';
+                      if (hours > 1) return `${hours.toFixed(1)} hours`;
+                      return `${Math.round(hours * 60)} min`;
+                    }
+                    return 'N/A';
+                  })()}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Battery className="w-4 h-4 text-green-600" />
+                <span className="font-medium">Battery Health:</span>
+                <span>Not available</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Battery className="w-4 h-4 text-blue-600" />
+                <span className="font-medium">Cycle Count:</span>
+                <span>Not available</span>
+              </div>
+            </div>
+          </div>
+          {/* Battery Trend Graph */}
+          <div className="bg-white/60 rounded shadow p-4 flex flex-col h-full">
+            <div className="font-semibold mb-2">Battery Level Trend</div>
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart data={batteryHistory} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="time" minTickGap={20} />
+                <YAxis domain={[0, 100]} tickFormatter={v => `${v}%`} />
+                <Tooltip formatter={(v: number) => `${v}%`} />
+                <Line type="monotone" dataKey="battery" stroke="#facc15" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
         {/* Grid Generation & Voltage Cards */}
