@@ -164,6 +164,8 @@ const Dashboard = () => {
     dust: 0,
     timestamp: new Date().toISOString(),
   });
+  // Power is calculated as current * voltage
+  const power = energyData.gridGeneration * energyData.gridVoltage;
   // History for all metrics
   const [history, setHistory] = useState<any[]>([]);
   const [gridType, setGridType] = useState<string>(() => localStorage.getItem('selectedGrid') || 'solar');
@@ -290,22 +292,25 @@ const Dashboard = () => {
 
   const fetchData = useCallback(async () => {
     if (!thingSpeakService) return;
-    
     setIsLoading(true);
     try {
       const data = await thingSpeakService.getLatestData();
       if (data) {
-        setEnergyData(data);
+        setEnergyData(prev => ({
+          ...prev,
+          ...data // always update all fields from latest fetch
+        }));
         setLastUpdated(new Date(data.timestamp).toLocaleTimeString());
       } else {
         // Fallback to demo data if no data available
         setEnergyData(prev => ({
           ...prev,
-          solarGeneration: Math.floor(Math.random() * 500) + 200,
-          windGeneration: Math.floor(Math.random() * 300) + 100,
+          gridGeneration: Math.floor(Math.random() * 500) + 200,
+          gridVoltage: Math.floor(Math.random() * 300) + 100,
           batteryLevel: Math.floor(Math.random() * 40) + 60,
-          consumption: Math.floor(Math.random() * 200) + 150,
-          totalGeneration: Math.floor(Math.random() * 800) + 300,
+          temperature: Math.floor(Math.random() * 20) + 20,
+          dust: Math.floor(Math.random() * 100) + 10,
+          timestamp: new Date().toISOString(),
         }));
         setLastUpdated(new Date().toLocaleTimeString());
       }
@@ -332,14 +337,15 @@ const Dashboard = () => {
       // Fetch last 20 points for charts
       try {
         const data = await thingSpeakService.getHistoricalData(20);
-        // Map to chart format
+        // Map to chart format, add power
         const mapped = data.map((d: any) => ({
           time: d.timestamp ? new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
           voltage: d.gridVoltage,
           current: d.gridGeneration,
           temperature: d.temperature,
           dust: d.dust,
-          battery: d.batteryLevel
+          battery: d.batteryLevel,
+          power: d.gridGeneration * d.gridVoltage
         }));
         setHistory(mapped);
       } catch (e) {
@@ -506,8 +512,8 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Grid Generation & Voltage Cards + Charts */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
+        {/* Grid Generation, Voltage & Power Cards + Charts */}
+        <div className="grid grid-cols-3 gap-4 mb-6">
           {/* Grid Generation (Current) */}
           <Card className="relative overflow-hidden">
             <CardContent className="p-4">
@@ -549,6 +555,29 @@ const Dashboard = () => {
                     <YAxis />
                     <Tooltip />
                     <Line type="monotone" dataKey="voltage" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+          {/* Power */}
+          <Card className="relative overflow-hidden">
+            <CardContent className="p-4">
+              <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center mb-3">
+                <Zap className="w-6 h-6 text-purple-600" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground font-medium">Power</p>
+                <p className="text-2xl font-bold text-foreground">{power} W</p>
+              </div>
+              <div className="mt-4">
+                <ResponsiveContainer width="100%" height={100}>
+                  <LineChart data={history} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="time" minTickGap={20} />
+                    <YAxis />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="power" stroke="#a21caf" strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
